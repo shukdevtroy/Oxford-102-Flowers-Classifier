@@ -1,3 +1,4 @@
 gradio
 tensorflow
 numpy
+gdown
