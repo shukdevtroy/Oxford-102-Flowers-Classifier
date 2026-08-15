@@ -2,3 +2,4 @@ gradio
 tensorflow==2.19.0
 numpy
 gdown
+requests
