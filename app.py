@@ -19,7 +19,6 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 import gdown
-import base64
 from io import BytesIO
 
 # ---------------------------------------------------------------------
@@ -90,22 +89,6 @@ def get_flower_image_url(flower_name):
     # Construct the URL - assuming the image is named image_*.jpg
     encoded_name = flower_name.replace(' ', '%20')
     
-    # Try GitHub API first
-    api_url = f"https://api.github.com/repos/shukdevtroy/Oxford-102-Flowers-Classifier/contents/flowers/{encoded_name}"
-    
-    try:
-        response = requests.get(api_url, timeout=5)
-        if response.status_code == 200:
-            contents = response.json()
-            # Find the first image file
-            for item in contents:
-                if item['name'].endswith('.jpg') or item['name'].endswith('.jpeg'):
-                    url = item['download_url']
-                    image_url_cache[flower_name] = url
-                    return url
-    except:
-        pass
-    
     # Try common patterns for the image
     possible_names = [
         'image_00001.jpg',
@@ -130,33 +113,21 @@ def get_flower_image_url(flower_name):
     return None
 
 
-def get_flower_image_html(flower_name):
-    """Get HTML to display the flower image in a popup"""
-    # Get the image URL
-    image_url = get_flower_image_url(flower_name)
+def get_flower_image(flower_name):
+    """Download and return the flower image as PIL Image"""
+    url = get_flower_image_url(flower_name)
+    if not url:
+        return None
     
-    if not image_url:
-        return f"""
-        <div style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
-            <h3>🌺 {flower_name}</h3>
-            <p style="color: #666;">Image not found for this flower.</p>
-            <p style="color: #999; font-size: 12px;">Please check if the image exists in the repository.</p>
-            <button onclick="closePopup()" style="margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
-        </div>
-        """
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            img = Image.open(BytesIO(response.content))
+            return img
+    except Exception as e:
+        print(f"Error downloading image for {flower_name}: {e}")
     
-    return f"""
-    <div style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
-        <h3>🌺 {flower_name}</h3>
-        <img src="{image_url}" 
-             style="max-width: 500px; max-height: 500px; width: auto; height: auto; 
-                    border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); 
-                    margin: 10px auto; display: block;" 
-             alt="{flower_name}" 
-             onerror="this.parentElement.innerHTML='<p style=\\'color: #666;\\'>Image failed to load. Please check the image URL.</p><button onclick=\\'closePopup()\\' style=\\'margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;\\'>Close</button>'"/>
-        <p style="color: #666; margin-top: 10px;">Click outside or press ESC to close</p>
-    </div>
-    """
+    return None
 
 
 def label_to_flower_name(folder_label):
@@ -193,26 +164,17 @@ def predict(image):
 
 
 # ---------------------------------------------------------------------
-# Function to handle flower image display using Gradio's Image component
+# Function to display flower image in gallery
 # ---------------------------------------------------------------------
-def display_flower_image(flower_name):
-    """Return image and name for display"""
-    image_url = get_flower_image_url(flower_name)
-    
-    if not image_url:
-        return None, f"❌ Image not found for {flower_name}"
-    
-    try:
-        # Download the image
-        response = requests.get(image_url, timeout=10)
-        if response.status_code == 200:
-            img = Image.open(BytesIO(response.content))
-            return img, f"🌺 {flower_name}"
-        else:
-            return None, f"❌ Failed to load image for {flower_name}"
-    except Exception as e:
-        print(f"Error loading image: {e}")
-        return None, f"❌ Error loading image for {flower_name}"
+def show_flower_in_gallery(flower_name, gallery_state):
+    """Update the gallery with the selected flower image"""
+    img = get_flower_image(flower_name)
+    if img:
+        return gr.update(value=[(img, flower_name)], visible=True), flower_name
+    else:
+        # Create a placeholder image with text
+        placeholder = Image.new('RGB', (500, 500), color='#f0f0f0')
+        return gr.update(value=[(placeholder, f"❌ Image not found: {flower_name}")], visible=True), flower_name
 
 
 # ---------------------------------------------------------------------
@@ -242,7 +204,7 @@ def create_accordion_html():
         <div class="accordion-item" data-flower="{flower_name}">
             <div class="accordion-header">
                 <span class="flower-name">🌺 {display_name}</span>
-                <button class="view-link" onclick="showFlowerPopup('{flower_name}')">
+                <button class="view-link" onclick="handleViewImage('{flower_name}')">
                     👁️ View Image
                 </button>
             </div>
@@ -255,6 +217,7 @@ def create_accordion_html():
         max-width: 800px;
         margin: 0 auto;
         font-family: Arial, sans-serif;
+        padding: 10px;
     }}
     .accordion-item {{
         border: 1px solid #ddd;
@@ -350,17 +313,6 @@ def create_accordion_html():
         padding: 40px;
         color: #666;
     }}
-    .popup-image-container {{
-        text-align: center;
-        padding: 20px;
-    }}
-    .popup-image-container img {{
-        max-width: 100%;
-        max-height: 500px;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        margin: 10px 0;
-    }}
     @keyframes fadeIn {{
         from {{ opacity: 0; }}
         to {{ opacity: 1; }}
@@ -399,8 +351,8 @@ def create_accordion_html():
     </div>
     
     <script>
-    // Function to show popup with flower image using a direct fetch approach
-    function showFlowerPopup(flowerName) {{
+    // Function to show popup with flower image
+    function handleViewImage(flowerName) {{
         const popup = document.getElementById('popup-overlay');
         const body = document.getElementById('popup-body');
         
@@ -408,77 +360,54 @@ def create_accordion_html():
         body.innerHTML = '<div class="popup-loading">🌺 Loading flower image...</div>';
         popup.style.display = 'flex';
         
-        // Try to get the image using the GitHub API
-        const imageUrl = `https://raw.githubusercontent.com/shukdevtroy/Oxford-102-Flowers-Classifier/main/flowers/${{encodeURIComponent(flowerName)}}/image_00001.jpg`;
+        // Get the Gradio app
+        const gradioApp = document.querySelector('gradio-app');
+        if (!gradioApp) {{
+            body.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <p style="color: #e74c3c;">Error: Could not find Gradio app.</p>
+                    <button onclick="closePopup(event)" style="margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                </div>
+            `;
+            return;
+        }}
         
-        // Check if image exists
-        fetch(imageUrl, {{ method: 'HEAD' }})
-            .then(response => {{
-                if (response.ok) {{
-                    // Image exists, display it
-                    body.innerHTML = `
-                        <div class="popup-image-container">
-                            <h3>🌺 ${{flowerName}}</h3>
-                            <img src="${{imageUrl}}" alt="${{flowerName}}" 
-                                 onerror="this.parentElement.innerHTML='<p style=\\'color: #666;\\'>Image failed to load</p>'"/>
-                            <p style="color: #666; margin-top: 10px;">Click outside or press ESC to close</p>
-                        </div>
-                    `;
-                }} else {{
-                    // Try alternative image names
-                    const altNames = ['image_00001.jpeg', '1.jpg', 'image.jpg'];
-                    let found = false;
-                    
-                    for (const altName of altNames) {{
-                        const altUrl = `https://raw.githubusercontent.com/shukdevtroy/Oxford-102-Flowers-Classifier/main/flowers/${{encodeURIComponent(flowerName)}}/${{altName}}`;
-                        fetch(altUrl, {{ method: 'HEAD' }})
-                            .then(res => {{
-                                if (res.ok && !found) {{
-                                    found = true;
-                                    body.innerHTML = `
-                                        <div class="popup-image-container">
-                                            <h3>🌺 ${{flowerName}}</h3>
-                                            <img src="${{altUrl}}" alt="${{flowerName}}" 
-                                                 onerror="this.parentElement.innerHTML='<p style=\\'color: #666;\\'>Image failed to load</p>'"/>
-                                            <p style="color: #666; margin-top: 10px;">Click outside or press ESC to close</p>
-                                        </div>
-                                    `;
-                                }}
-                            }})
-                            .catch(() => {{}});
-                    }}
-                    
-                    // If no image found after trying all alternatives
-                    setTimeout(() => {{
-                        if (!found) {{
-                            body.innerHTML = `
-                                <div style="text-align: center; padding: 20px;">
-                                    <h3>🌺 ${{flowerName}}</h3>
-                                    <p style="color: #666;">Image not found for this flower.</p>
-                                    <p style="color: #999; font-size: 12px;">Please check if the image exists in the repository.</p>
-                                    <button onclick="closePopup(event)" style="margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
-                                </div>
-                            `;
-                        }}
-                    }}, 2000);
-                }}
-            }})
-            .catch(error => {{
-                console.error('Error:', error);
-                body.innerHTML = `
-                    <div style="text-align: center; padding: 20px;">
-                        <p style="color: #e74c3c;">Error loading image. Please try again.</p>
-                        <button onclick="closePopup(event)" style="margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
-                    </div>
-                `;
-            }});
+        // Use Gradio's internal API to call the function
+        // Find the function by its name in the components
+        const app = gradioApp.__gradio_root__;
+        if (!app) {{
+            body.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <p style="color: #e74c3c;">Error: Gradio app not initialized.</p>
+                    <button onclick="closePopup(event)" style="margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                </div>
+            `;
+            return;
+        }}
+        
+        // Use the fetch API to call the Gradio function
+        // This is a workaround to trigger the Gradio function
+        try {{
+            // Find the hidden gallery button or use a different approach
+            const galleryInput = document.querySelector('#flower-gallery-input');
+            if (galleryInput) {{
+                // Set the value and trigger change
+                galleryInput.value = flowerName;
+                galleryInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            }}
+        }} catch (error) {{
+            console.error('Error:', error);
+        }}
     }}
     
     function closePopup(event) {{
         if (event) {{
             event.stopPropagation();
         }}
-        document.getElementById('popup-overlay').style.display = 'none';
+        const popup = document.getElementById('popup-overlay');
+        if (popup) {{
+            popup.style.display = 'none';
+        }}
     }}
     
     // Close popup when pressing Escape key
@@ -487,6 +416,31 @@ def create_accordion_html():
             closePopup(e);
         }}
     }});
+    
+    // Function to update popup with image from Gradio
+    window.updatePopupWithImage = function(flowerName, imageData) {{
+        const body = document.getElementById('popup-body');
+        if (imageData) {{
+            body.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <h3>🌺 ${{flowerName}}</h3>
+                    <img src="${{imageData}}" 
+                         style="max-width: 100%; max-height: 500px; border-radius: 10px; 
+                                box-shadow: 0 4px 8px rgba(0,0,0,0.2); margin: 10px 0;" 
+                         alt="${{flowerName}}"/>
+                    <p style="color: #666; margin-top: 10px;">Click outside or press ESC to close</p>
+                </div>
+            `;
+        }} else {{
+            body.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <h3>🌺 ${{flowerName}}</h3>
+                    <p style="color: #666;">Image not found for this flower.</p>
+                    <button onclick="closePopup(event)" style="margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                </div>
+            `;
+        }}
+    }};
     </script>
     """
 
@@ -528,9 +482,31 @@ with gr.Blocks(title="🌸 Oxford 102 Flowers Classifier", theme=gr.themes.Soft(
         Click the **"View Image"** button next to any flower name to see its image in a popup.
         """)
         
+        # Create a hidden textbox for the flower name selection
+        selected_flower = gr.Textbox(visible=False, elem_id="flower-gallery-input")
+        
+        # Create a gallery to display the flower image
+        flower_gallery = gr.Gallery(
+            label="Flower Image",
+            show_label=True,
+            elem_id="flower-gallery",
+            columns=1,
+            rows=1,
+            height=500,
+            visible=False,
+            object_fit="contain"
+        )
+        
         # Create and display the accordion
         accordion_html = create_accordion_html()
         gr.HTML(accordion_html)
+        
+        # Connect the selected flower to the gallery
+        selected_flower.change(
+            fn=show_flower_in_gallery,
+            inputs=[selected_flower, gr.State(None)],
+            outputs=[flower_gallery, selected_flower]
+        )
         
         gr.Markdown("""
         ### 📚 Dataset Information
