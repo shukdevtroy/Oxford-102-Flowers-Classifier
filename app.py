@@ -19,6 +19,8 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 import gdown
+import base64
+from io import BytesIO
 
 # ---------------------------------------------------------------------
 # Config — must match the training notebook
@@ -191,18 +193,33 @@ def predict(image):
 
 
 # ---------------------------------------------------------------------
-# Function to handle flower image display
+# Function to handle flower image display using Gradio's Image component
 # ---------------------------------------------------------------------
-def show_flower_image(flower_name):
-    """Return HTML for displaying flower image"""
-    return get_flower_image_html(flower_name)
+def display_flower_image(flower_name):
+    """Return image and name for display"""
+    image_url = get_flower_image_url(flower_name)
+    
+    if not image_url:
+        return None, f"❌ Image not found for {flower_name}"
+    
+    try:
+        # Download the image
+        response = requests.get(image_url, timeout=10)
+        if response.status_code == 200:
+            img = Image.open(BytesIO(response.content))
+            return img, f"🌺 {flower_name}"
+        else:
+            return None, f"❌ Failed to load image for {flower_name}"
+    except Exception as e:
+        print(f"Error loading image: {e}")
+        return None, f"❌ Error loading image for {flower_name}"
 
 
 # ---------------------------------------------------------------------
 # Create the accordion HTML with JavaScript
 # ---------------------------------------------------------------------
 def create_accordion_html():
-    """Create the complete accordion HTML with JavaScript"""
+    """Create the complete accordion HTML with JavaScript using Gradio events"""
     
     # Build the accordion items HTML
     accordion_items = ""
@@ -219,10 +236,10 @@ def create_accordion_html():
             current_letter = first_letter
             accordion_items += f'<div style="margin: 20px 0 10px 0; padding: 5px 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 5px; font-weight: bold; font-size: 18px;">{current_letter}</div>'
         
-        # Display the flower
+        # Display the flower with a data attribute for the flower name
         display_name = flower_name.title()
         accordion_items += f"""
-        <div class="accordion-item">
+        <div class="accordion-item" data-flower="{flower_name}">
             <div class="accordion-header">
                 <span class="flower-name">🌺 {display_name}</span>
                 <button class="view-link" onclick="showFlowerPopup('{flower_name}')">
@@ -333,6 +350,17 @@ def create_accordion_html():
         padding: 40px;
         color: #666;
     }}
+    .popup-image-container {{
+        text-align: center;
+        padding: 20px;
+    }}
+    .popup-image-container img {{
+        max-width: 100%;
+        max-height: 500px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        margin: 10px 0;
+    }}
     @keyframes fadeIn {{
         from {{ opacity: 0; }}
         to {{ opacity: 1; }}
@@ -371,10 +399,7 @@ def create_accordion_html():
     </div>
     
     <script>
-    // Store the current Gradio app
-    let gradioApp = null;
-    
-    // Function to show popup with flower image
+    // Function to show popup with flower image using a direct fetch approach
     function showFlowerPopup(flowerName) {{
         const popup = document.getElementById('popup-overlay');
         const body = document.getElementById('popup-body');
@@ -383,19 +408,60 @@ def create_accordion_html():
         body.innerHTML = '<div class="popup-loading">🌺 Loading flower image...</div>';
         popup.style.display = 'flex';
         
-        // Get the Gradio app instance
-        if (!gradioApp) {{
-            const app = document.querySelector('gradio-app');
-            if (app) {{
-                gradioApp = app;
-            }}
-        }}
+        // Try to get the image using the GitHub API
+        const imageUrl = `https://raw.githubusercontent.com/shukdevtroy/Oxford-102-Flowers-Classifier/main/flowers/${{encodeURIComponent(flowerName)}}/image_00001.jpg`;
         
-        // Use fetch to get the flower image HTML
-        fetch('/flower_image/' + encodeURIComponent(flowerName))
-            .then(response => response.text())
-            .then(html => {{
-                body.innerHTML = html;
+        // Check if image exists
+        fetch(imageUrl, {{ method: 'HEAD' }})
+            .then(response => {{
+                if (response.ok) {{
+                    // Image exists, display it
+                    body.innerHTML = `
+                        <div class="popup-image-container">
+                            <h3>🌺 ${{flowerName}}</h3>
+                            <img src="${{imageUrl}}" alt="${{flowerName}}" 
+                                 onerror="this.parentElement.innerHTML='<p style=\\'color: #666;\\'>Image failed to load</p>'"/>
+                            <p style="color: #666; margin-top: 10px;">Click outside or press ESC to close</p>
+                        </div>
+                    `;
+                }} else {{
+                    // Try alternative image names
+                    const altNames = ['image_00001.jpeg', '1.jpg', 'image.jpg'];
+                    let found = false;
+                    
+                    for (const altName of altNames) {{
+                        const altUrl = `https://raw.githubusercontent.com/shukdevtroy/Oxford-102-Flowers-Classifier/main/flowers/${{encodeURIComponent(flowerName)}}/${{altName}}`;
+                        fetch(altUrl, {{ method: 'HEAD' }})
+                            .then(res => {{
+                                if (res.ok && !found) {{
+                                    found = true;
+                                    body.innerHTML = `
+                                        <div class="popup-image-container">
+                                            <h3>🌺 ${{flowerName}}</h3>
+                                            <img src="${{altUrl}}" alt="${{flowerName}}" 
+                                                 onerror="this.parentElement.innerHTML='<p style=\\'color: #666;\\'>Image failed to load</p>'"/>
+                                            <p style="color: #666; margin-top: 10px;">Click outside or press ESC to close</p>
+                                        </div>
+                                    `;
+                                }}
+                            }})
+                            .catch(() => {{}});
+                    }}
+                    
+                    // If no image found after trying all alternatives
+                    setTimeout(() => {{
+                        if (!found) {{
+                            body.innerHTML = `
+                                <div style="text-align: center; padding: 20px;">
+                                    <h3>🌺 ${{flowerName}}</h3>
+                                    <p style="color: #666;">Image not found for this flower.</p>
+                                    <p style="color: #999; font-size: 12px;">Please check if the image exists in the repository.</p>
+                                    <button onclick="closePopup(event)" style="margin-top: 10px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                                </div>
+                            `;
+                        }}
+                    }}, 2000);
+                }}
             }})
             .catch(error => {{
                 console.error('Error:', error);
@@ -472,14 +538,6 @@ with gr.Blocks(title="🌸 Oxford 102 Flowers Classifier", theme=gr.themes.Soft(
         commonly found in the United Kingdom. The model was trained to classify these flowers 
         with high accuracy.
         """)
-
-# Add custom endpoint for flower images using FastAPI route
-@demo.app.get("/flower_image/{flower_name}")
-async def get_flower_image(flower_name: str):
-    """Endpoint to get flower image HTML"""
-    from fastapi.responses import HTMLResponse
-    html = get_flower_image_html(flower_name)
-    return HTMLResponse(content=html)
 
 # Launch the app
 demo.queue()
