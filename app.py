@@ -834,9 +834,9 @@ def create_flower_grid():
 # ---------------------------------------------------------------------
 with gr.Blocks(
     title="🌸 Floral Vibes - Oxford 102 Flowers Classifier",
-    theme=gr.themes.Soft(
+    theme=gr.themes.Ocean(
         primary_hue="stone",
-        secondary_hue="warm",
+        secondary_hue="amber",
         neutral_hue="slate",
         font=gr.themes.GoogleFont("Inter"),
     ),
