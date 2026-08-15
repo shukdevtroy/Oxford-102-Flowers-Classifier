@@ -946,42 +946,36 @@ with gr.Blocks(
                 </span>
             </div>
             """)
+
+            flower_buttons = []
+            grouped_flowers = {}
+            for flower_name in sorted_flower_names:
+                first_letter = flower_name[0].upper()
+                if first_letter not in grouped_flowers:
+                    grouped_flowers[first_letter] = []
+                grouped_flowers[first_letter].append(flower_name)
             
             # Gallery Layout - Directory on left, Viewer on right
             with gr.Row(equal_height=False):
-                # Left: Flower Directory (scrollable)
                 with gr.Column(scale=1, min_width=300):
-                    with gr.Group(elem_classes="gallery-directory"):
-                        gr.HTML("""
-                        <div class="directory-header">
-                            <div class="title">🌺 Flower Directory</div>
-                            <div class="count">102 Species</div>
-                        </div>
-                        """)
-                        
-                        # Create flower buttons with letter grouping
-                        flower_buttons = []
-                        grouped_flowers = defaultdict(list)
-                        
-                        for flower_name in sorted_flower_names:
-                            first_letter = flower_name[0].upper()
-                            grouped_flowers[first_letter].append(flower_name)
-                        
-                        # Build HTML with proper grid
-                        flower_grid_html = '<div class="flower-grid">'
-                        
+                    gr.Markdown("""
+                    <div style="font-family: 'Playfair Display', serif; font-size: 1.1rem; color: #2d1b0e; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                        🌺 Flower Directory
+                        <span class="premium-badge">102 Species</span>
+                    </div>
+                    """)
+
+                    with gr.Column(elem_classes="gallery-directory"):
                         for letter in sorted(grouped_flowers.keys()):
                             flowers = grouped_flowers[letter]
-                            flower_grid_html += f'''
+                            gr.HTML(f'''
                             <div class="flower-section-header">
                                 <span class="letter-badge">{letter}</span>
                                 <span>{letter}</span>
                                 <span class="count-badge">{len(flowers)} species</span>
                             </div>
-                            '''
-                            
+                            ''')
                             for flower in flowers:
-                                # Create a button for each flower
                                 btn = gr.Button(
                                     f"🌺 {flower.title()}",
                                     variant="secondary",
@@ -989,9 +983,47 @@ with gr.Blocks(
                                     elem_classes="flower-btn"
                                 )
                                 flower_buttons.append((btn, flower))
-                        
-                        flower_grid_html += '</div>'
-                        gr.HTML(flower_grid_html)
+
+                    gr.HTML('''
+                    <script>
+                    (() => {
+                        const directory = document.querySelector('.gallery-directory');
+                        if (!directory || directory.dataset.bound === 'true') return;
+                        directory.dataset.bound = 'true';
+
+                        const buttons = [...directory.querySelectorAll('.flower-btn')];
+                        if (!buttons.length) return;
+
+                        const setSelected = (button) => {
+                            buttons.forEach((btn) => btn.classList.toggle('selected', btn === button));
+                        };
+
+                        const syncSelectionFromScroll = () => {
+                            const containerCenter = directory.scrollTop + (directory.clientHeight / 2);
+                            let nearest = buttons[0];
+                            let nearestDistance = Number.MAX_SAFE_INTEGER;
+
+                            buttons.forEach((button) => {
+                                const buttonCenter = button.offsetTop + (button.offsetHeight / 2);
+                                const distance = Math.abs(buttonCenter - containerCenter);
+                                if (distance < nearestDistance) {
+                                    nearestDistance = distance;
+                                    nearest = button;
+                                }
+                            });
+
+                            setSelected(nearest);
+                        };
+
+                        buttons.forEach((button) => {
+                            button.addEventListener('click', () => setSelected(button));
+                        });
+
+                        directory.addEventListener('scroll', syncSelectionFromScroll, { passive: true });
+                        setTimeout(syncSelectionFromScroll, 100);
+                    })();
+                    </script>
+                    ''')
                 
                 # Right: Image Viewer (fixed position, doesn't scroll)
                 with gr.Column(scale=2, min_width=400):
