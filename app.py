@@ -242,38 +242,56 @@ PREMIUM_CSS = """
         transform: translateY(-1px);
     }
     
-    /* Flower Gallery - Scrollable Directory */
+    /* Gallery Layout */
     .gallery-layout {
         display: flex;
-        gap: 24px;
+        gap: 20px;
         height: 600px;
-        align-items: stretch;
     }
     
     .gallery-directory {
         flex: 1;
         min-width: 300px;
-        max-width: 420px;
+        max-height: 620px;
+        overflow-y: auto;
         background: white;
         border-radius: 20px;
-        padding: 16px 18px;
+        padding: 15px 20px;
         box-shadow: 0 4px 30px rgba(0,0,0,0.04);
-        overflow-y: auto;
-        height: 100%;
+        scroll-behavior: smooth;
+        position: relative;
     }
     
     .gallery-directory::-webkit-scrollbar {
-        width: 6px;
+        width: 10px;
     }
-    
+
     .gallery-directory::-webkit-scrollbar-track {
-        background: #f0ebe5;
+        background: #f2eae3;
         border-radius: 10px;
     }
-    
+
     .gallery-directory::-webkit-scrollbar-thumb {
-        background: #4a2c1a;
+        background: linear-gradient(180deg, #4a2c1a, #8a634a);
         border-radius: 10px;
+    }
+
+    .gallery-directory .flower-btn {
+        width: 100%;
+        justify-content: flex-start;
+        margin-bottom: 6px;
+        background: transparent;
+        border: 1px solid rgba(45, 27, 14, 0.08);
+        border-radius: 10px;
+        padding: 10px 12px;
+        transition: all 0.25s ease;
+    }
+
+    .gallery-directory .flower-btn.selected {
+        background: rgba(245, 214, 179, 0.28) !important;
+        border-color: #4a2c1a !important;
+        transform: translateX(4px);
+        box-shadow: 0 6px 18px rgba(45, 27, 14, 0.08);
     }
     
     .gallery-viewer {
@@ -281,14 +299,12 @@ PREMIUM_CSS = """
         min-width: 350px;
         background: white;
         border-radius: 20px;
-        padding: 24px;
+        padding: 20px;
         box-shadow: 0 4px 30px rgba(0,0,0,0.04);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 100%;
-        overflow: hidden;
     }
     
     .flower-grid {
