@@ -1,4 +1,4 @@
 gradio
-tensorflow
+tensorflow-cpu
 numpy
 gdown
