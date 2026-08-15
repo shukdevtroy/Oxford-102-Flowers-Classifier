@@ -15,6 +15,7 @@ still works, just less readable.
 import json
 import os
 
+import gdown
 import gradio as gr
 import numpy as np
 import tensorflow as tf
@@ -29,6 +30,26 @@ TOP_K = 5
 MODEL_PATH = "alexnet_flowers102.keras"
 CLASS_NAMES_PATH = "class_names.json"
 CAT_TO_NAME_PATH = "cat_to_name.json"
+
+# Google Drive file ID for the model (from the shareable link).
+# Set this as an env var in Render's dashboard rather than hardcoding it
+# here, so you can swap models without editing code.
+#   Link:    https://drive.google.com/file/d/XXXXXXXXXXXXXXXXXXXX/view
+#   File ID: XXXXXXXXXXXXXXXXXXXX  (the part between /d/ and /view)
+GDRIVE_MODEL_FILE_ID = os.environ.get("GDRIVE_MODEL_FILE_ID", "")
+
+# ---------------------------------------------------------------------
+# Download the model from Google Drive if it isn't already present
+# ---------------------------------------------------------------------
+if not os.path.exists(MODEL_PATH):
+    if not GDRIVE_MODEL_FILE_ID:
+        raise RuntimeError(
+            "MODEL_PATH not found locally and GDRIVE_MODEL_FILE_ID is not set. "
+            "Either commit the .keras file to the repo, or set the "
+            "GDRIVE_MODEL_FILE_ID environment variable."
+        )
+    print(f"Downloading model from Google Drive (file id: {GDRIVE_MODEL_FILE_ID})...")
+    gdown.download(id=GDRIVE_MODEL_FILE_ID, output=MODEL_PATH, quiet=False)
 
 # ---------------------------------------------------------------------
 # Load artifacts once, at startup
